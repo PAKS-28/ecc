@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECC Encryption and Decryption</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            display: flex;
+            width: 90%;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .section {
+            flex: 1;
+            padding: 20px;
+            border-right: 1px solid #ccc;
+        }
+        .section:last-child {
+            border-right: none;
+        }
+        h2 {
+            text-align: center;
+        }
+        textarea, input[type="file"] {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .output {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Encryption Section -->
+        <div class="section">
+            <h2>Encrypt</h2>
+            <button onclick="generateKeys()">Generate ECC Keys</button>
+            <div class="output" id="keysOutput">Keys will appear here...</div>
+            <textarea id="plaintext" placeholder="Enter text to encrypt..."></textarea>
+            <button onclick="encryptText()">Encrypt</button>
+            <div class="output" id="encryptedOutput">Encrypted Output:</div>
+            <button onclick="saveToFile()">Save as File</button>
+        </div>
+
+        <!-- Decryption Section -->
+        <div class="section">
+            <h2>Decrypt</h2>
+            <input type="file" id="fileInput" accept=".txt" />
+            <button onclick="readFromFile()">Upload File</button>
+            <div class="output" id="fileContent">Uploaded file content will appear here...</div>
+            <button onclick="decryptText()">Decrypt</button>
+            <div class="output" id="decryptedOutput">Decrypted Output:</div>
+        </div>
+    </div>
+
+    <script>
+        let privateKey, publicKey;
+
+        function generateKeys() {
+            // Simulated ECC key generation (replace with actual library for production)
+            privateKey = Math.floor(Math.random() * 100) + 1; // Private key: random integer
+            publicKey = `P${privateKey * 2}`; // Public key: derived from private key (simplified example)
+            document.getElementById("keysOutput").textContent = 
+                `Private Key: ${privateKey}\nPublic Key: ${publicKey}`;
+        }
+
+        function toHex(str) {
+            return Array.from(str)
+                .map(char => char.charCodeAt(0).toString(16).padStart(2, "0"))
+                .join("");
+        }
+
+        function toBase64(str) {
+            return btoa(str);
+        }
+
+        function encryptText() {
+            const plaintext = document.getElementById("plaintext").value;
+            if (!plaintext.trim()) {
+                alert("Please enter text to encrypt.");
+                return;
+            }
+            const encrypted = [...plaintext].map(char =>
+                String.fromCharCode(char.charCodeAt(0) + privateKey)
+            ).join("");
+            
+            const hexOutput = toHex(encrypted);
+            const base64Output = toBase64(encrypted);
+
+            document.getElementById("encryptedOutput").innerHTML = `
+                <strong>Hexadecimal:</strong> ${hexOutput}<br>
+                <strong>Base64:</strong> ${base64Output}`;
+        }
+
+        function saveToFile() {
+            const encryptedOutput = document.getElementById("encryptedOutput").innerHTML;
+            const base64Match = encryptedOutput.match(/Base64:<\/strong> ([^<]+)/);
+            if (!base64Match) {
+                alert("No encrypted text to save.");
+                return;
+            }
+            const base64Output = base64Match[1];
+            const blob = new Blob([base64Output], { type: "text/plain" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "encrypted.txt";
+            link.click();
+        }
+
+        function readFromFile() {
+            const fileInput = document.getElementById("fileInput");
+            if (!fileInput.files.length) {
+                alert("Please upload a file.");
+                return;
+            }
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                document.getElementById("fileContent").textContent = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+
+        function fromBase64(base64) {
+            return atob(base64);
+        }
+
+        function decryptText() {
+            const base64Input = document.getElementById("fileContent").textContent.trim();
+            if (!base64Input) {
+                alert("Please upload a file with encrypted content.");
+                return;
+            }
+            const encryptedText = fromBase64(base64Input);
+            const decrypted = [...encryptedText].map(char =>
+                String.fromCharCode(char.charCodeAt(0) - privateKey)
+            ).join("");
+            document.getElementById("decryptedOutput").textContent = "Decrypted Text: " + decrypted;
+        }
+    </script>
+</body>
+</html>
