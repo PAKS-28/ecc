@@ -3,169 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECC Encryption and Decryption</title>
+    <title>ECC Encryption Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.4/elliptic.min.js"></script>
+    <script>
+        let ec;
+        let keyPair;
+
+        // Initialize ECC curve
+        function initializeECC() {
+            ec = new elliptic.ec('secp256k1');
+        }
+
+        // Generate ECC Key Pair
+        function generateKeyPair() {
+            keyPair = ec.genKeyPair();
+            const pubKey = keyPair.getPublic('hex');
+            const privKey = keyPair.getPrivate('hex');
+
+            document.getElementById('publicKey').value = pubKey;
+            document.getElementById('privateKey').value = privKey;
+
+            document.getElementById('step1').innerText = `Step 1: Generated Public Key: ${pubKey}`;
+            document.getElementById('step2').innerText = `Step 2: Generated Private Key: ${privKey}`;
+        }
+
+        // Encrypt a message using pure ECC
+        function encryptMessage() {
+            const message = document.getElementById('message').value;
+            if (!message) {
+                alert('Please enter a message to encrypt.');
+                return;
+            }
+
+            if (!keyPair) {
+                alert('Generate a key pair first.');
+                return;
+            }
+
+            // Generate ephemeral key pair for encryption
+            const ephemeralKey = ec.genKeyPair();
+            const sharedKey = ephemeralKey.derive(keyPair.getPublic());
+
+            // Convert message to bytes (UTF-8) and then to a hex string
+            const encoder = new TextEncoder();
+            const encodedMessage = encoder.encode(message);  // Convert the message to a Uint8Array
+            const ciphertext = Array.from(encodedMessage).map(byte => byte.toString(16).padStart(2, '0')).join('');
+
+            const encryptedMessage = {
+                ephemeralPubKey: ephemeralKey.getPublic('hex'),
+                ciphertext: ciphertext,
+                sharedKey: sharedKey.toString(16)
+            };
+
+            document.getElementById('encryptedMessage').value = JSON.stringify(encryptedMessage);
+
+            // Create a downloadable file
+            const blob = new Blob([JSON.stringify(encryptedMessage)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'encrypted_message.json';
+            link.textContent = 'Download Encrypted Message';
+
+            const downloadSection = document.getElementById('downloadSection');
+            downloadSection.innerHTML = '';
+            downloadSection.appendChild(link);
+
+            document.getElementById('step3').innerText = `Step 3: Message encrypted and ready for download.`;
+        }
+
+        // Decrypt an uploaded file using pure ECC
+        function decryptFile(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                alert('Please upload a file.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function () {
+                const encryptedMessage = JSON.parse(reader.result);
+
+                if (!keyPair) {
+                    alert('Generate a key pair first.');
+                    return;
+                }
+
+                // Derive shared key from ephemeral public key
+                const ephemeralPubKey = ec.keyFromPublic(encryptedMessage.ephemeralPubKey, 'hex');
+                const sharedKey = keyPair.derive(ephemeralPubKey.getPublic());
+
+                if (sharedKey.toString(16) === encryptedMessage.sharedKey) {
+                    // Convert hex string back to a Uint8Array
+                    const decodedArray = new Uint8Array(encryptedMessage.ciphertext.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+
+                    // Decode the message
+                    const decoder = new TextDecoder();
+                    const decryptedMessage = decoder.decode(decodedArray);
+
+                    document.getElementById('decryptedMessage').value = decryptedMessage;
+                    document.getElementById('step6').innerText = `Step 6: Message successfully decrypted.`;
+                } else {
+                    document.getElementById('decryptedMessage').value = 'Decryption failed: Shared key mismatch.';
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        window.onload = initializeECC;
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
+            margin: 20px;
         }
-        .container {
-            display: flex;
-            width: 90%;
-            border: 1px solid #ccc;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+
+        h1, h2 {
+            color: #333;
         }
-        .section {
-            flex: 1;
-            padding: 20px;
-            border-right: 1px solid #ccc;
-        }
-        .section:last-child {
-            border-right: none;
-        }
-        h2 {
-            text-align: center;
-        }
-        textarea, input[type="file"] {
+
+        textarea, input[type="text"], button {
             width: 100%;
-            margin-bottom: 10px;
-        }
-        button {
-            width: 100%;
+            margin: 10px 0;
             padding: 10px;
-            border: none;
-            background-color: #4CAF50;
-            color: white;
             font-size: 16px;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
             cursor: pointer;
-            border-radius: 5px;
         }
+
         button:hover {
-            background-color: #45a049;
+            background-color: #0056b3;
         }
-        .output {
+
+        #downloadSection {
             margin-top: 10px;
+        }
+
+        .steps {
+            background: #f9f9f9;
             padding: 10px;
-            background-color: #f9f9f9;
             border: 1px solid #ddd;
+            margin: 20px 0;
             border-radius: 5px;
+        }
+
+        .steps p {
+            margin: 5px 0;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Encryption Section -->
-        <div class="section">
-            <h2>Encrypt</h2>
-            <button onclick="generateKeys()">Generate ECC Keys</button>
-            <div class="output" id="keysOutput">Keys will appear here...</div>
-            <textarea id="plaintext" placeholder="Enter text to encrypt..."></textarea>
-            <button onclick="encryptText()">Encrypt</button>
-            <div class="output" id="encryptedOutput">Encrypted Output:</div>
-            <button onclick="saveToFile()">Save as File</button>
-        </div>
+    <h1>ECC Encryption Simulation</h1>
 
-        <!-- Decryption Section -->
-        <div class="section">
-            <h2>Decrypt</h2>
-            <input type="file" id="fileInput" accept=".txt" />
-            <button onclick="readFromFile()">Upload File</button>
-            <div class="output" id="fileContent">Uploaded file content will appear here...</div>
-            <button onclick="decryptText()">Decrypt</button>
-            <div class="output" id="decryptedOutput">Decrypted Output:</div>
-        </div>
+    <button onclick="generateKeyPair()">Generate Key Pair</button>
+    <input type="text" id="publicKey" placeholder="Public Key" readonly>
+    <input type="text" id="privateKey" placeholder="Private Key" readonly>
+
+    <div class="steps">
+        <p id="step1">Step 1: Key generation will appear here.</p>
+        <p id="step2"></p>
     </div>
 
-    <script>
-        let privateKey, publicKey;
+    <hr>
 
-        function generateKeys() {
-            // Simulated ECC key generation (replace with actual library for production)
-            privateKey = Math.floor(Math.random() * 100) + 1; // Private key: random integer
-            publicKey = `P${privateKey * 2}`; // Public key: derived from private key (simplified example)
-            document.getElementById("keysOutput").textContent = 
-                `Private Key: ${privateKey}\nPublic Key: ${publicKey}`;
-        }
+    <h2>Encrypt a Message</h2>
+    <textarea id="message" placeholder="Enter your message here"></textarea>
+    <button onclick="encryptMessage()">Encrypt</button>
+    <textarea id="encryptedMessage" placeholder="Encrypted Message" readonly></textarea>
+    <div id="downloadSection"></div>
 
-        function toHex(str) {
-            return Array.from(str)
-                .map(char => char.charCodeAt(0).toString(16).padStart(2, "0"))
-                .join("");
-        }
+    <div class="steps">
+        <p id="step3">Step 3: Encryption steps will appear here.</p>
+        <p id="step4"></p>
+    </div>
 
-        function toBase64(str) {
-            return btoa(str);
-        }
+    <hr>
 
-        function encryptText() {
-            const plaintext = document.getElementById("plaintext").value;
-            if (!plaintext.trim()) {
-                alert("Please enter text to encrypt.");
-                return;
-            }
-            const encrypted = [...plaintext].map(char =>
-                String.fromCharCode(char.charCodeAt(0) + privateKey)
-            ).join("");
-            
-            const hexOutput = toHex(encrypted);
-            const base64Output = toBase64(encrypted);
+    <h2>Decrypt a File</h2>
+    <input type="file" onchange="decryptFile(event)">
+    <textarea id="decryptedMessage" placeholder="Decrypted Message" readonly></textarea>
 
-            document.getElementById("encryptedOutput").innerHTML = `
-                <strong>Hexadecimal:</strong> ${hexOutput}<br>
-                <strong>Base64:</strong> ${base64Output}`;
-        }
-
-        function saveToFile() {
-            const encryptedOutput = document.getElementById("encryptedOutput").innerHTML;
-            const base64Match = encryptedOutput.match(/Base64:<\/strong> ([^<]+)/);
-            if (!base64Match) {
-                alert("No encrypted text to save.");
-                return;
-            }
-            const base64Output = base64Match[1];
-            const blob = new Blob([base64Output], { type: "text/plain" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "encrypted.txt";
-            link.click();
-        }
-
-        function readFromFile() {
-            const fileInput = document.getElementById("fileInput");
-            if (!fileInput.files.length) {
-                alert("Please upload a file.");
-                return;
-            }
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                document.getElementById("fileContent").textContent = e.target.result;
-            };
-            reader.readAsText(file);
-        }
-
-        function fromBase64(base64) {
-            return atob(base64);
-        }
-
-        function decryptText() {
-            const base64Input = document.getElementById("fileContent").textContent.trim();
-            if (!base64Input) {
-                alert("Please upload a file with encrypted content.");
-                return;
-            }
-            const encryptedText = fromBase64(base64Input);
-            const decrypted = [...encryptedText].map(char =>
-                String.fromCharCode(char.charCodeAt(0) - privateKey)
-            ).join("");
-            document.getElementById("decryptedOutput").textContent = "Decrypted Text: " + decrypted;
-        }
-    </script>
+    <div class="steps">
+        <p id="step5">Step 5: Decryption steps will appear here.</p>
+        <p id="step6"></p>
+    </div>
 </body>
 </html>
